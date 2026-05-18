@@ -9,7 +9,7 @@ function RemoteControl() {
   const [isLoading, setIsLoading] = useState(false);
   
   // REPLACE WITH YOUR ACTUAL IP
-  const apiUrl = 'smart-home-api-production.up.railway.app/api/light'; 
+  const apiUrl = 'https://smart-home-api-production.up.railway.app/api/light'; 
 
   useEffect(() => {
     fetch(`${apiUrl}/status`)
@@ -108,7 +108,7 @@ function RemoteControl() {
 // --- 2. THE ROOM VIEW (For your Laptop Display) ---
 function RoomView() {
   const [isOn, setIsOn] = useState(false);
-  const apiUrl = 'smart-home-api-production.up.railway.app/api/light'; // REPLACE WITH ACTUAL IP
+  const apiUrl = 'https://smart-home-api-production.up.railway.app/api/light'; // REPLACE WITH ACTUAL IP
 
   useEffect(() => {
     const interval = setInterval(() => {
