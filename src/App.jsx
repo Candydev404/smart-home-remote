@@ -1,36 +1,61 @@
 import React, { useState, useEffect } from 'react';
 import { BrowserRouter, Routes, Route, Link } from 'react-router-dom';
 import { Lightbulb, Power, Clock, Home } from 'lucide-react';
+import BudgetWidget from './components/BudgetWidget';
 
-// --- 1. THE PREMIUM REMOTE CONTROL ---
+// --- 1. THE PREMIUM REMOTE CONTROL (V2) ---
 function RemoteControl() {
   const [isOn, setIsOn] = useState(false);
   const [lastActive, setLastActive] = useState('Never');
   const [isLoading, setIsLoading] = useState(false);
   
-  // REPLACE WITH YOUR ACTUAL IP
-  const apiUrl = 'https://smart-home-api-production.up.railway.app/api/light'; 
+  // LIVE Budget State
+  const [energySpend, setEnergySpend] = useState(0); // Starts at 0 until API loads
+  const budgetLimit = 5000; // Your monthly limit
+  
+  // Using a cleaner base URL to handle multiple routes
+  const baseUrl = 'https://smart-home-api-production.up.railway.app/api'; 
 
+  // NEW: A unified function to fetch everything at once
+  const fetchSystemData = async () => {
+    try {
+      // 1. Fetch Light Status
+      const lightRes = await fetch(`${baseUrl}/light/status`);
+      const lightData = await lightRes.json();
+      setIsOn(lightData.is_on);
+      setLastActive(lightData.last_active || 'Never');
+
+      // 2. Fetch Live Budget
+      const budgetRes = await fetch(`${baseUrl}/budget/current`);
+      const budgetData = await budgetRes.json();
+      setEnergySpend(budgetData.current_spend);
+      
+    } catch (err) {
+      console.error("API Connection Error:", err);
+    }
+  };
+
+  // Run the fetcher when the app first loads
   useEffect(() => {
-    fetch(`${apiUrl}/status`)
-      .then(res => res.json())
-      .then(data => {
-          setIsOn(data.is_on);
-          setLastActive(data.last_active || 'Never');
-      })
-      .catch(err => console.error("API error", err));
+    fetchSystemData();
   }, []);
 
   const toggleLight = async () => {
     setIsLoading(true);
     try {
-        const response = await fetch(`${apiUrl}/toggle`, {
+        const response = await fetch(`${baseUrl}/light/toggle`, {
             method: 'POST',
             headers: { 'Accept': 'application/json', 'Content-Type': 'application/json' }
         });
         const data = await response.json();
+        
+        // Update Light UI
         setIsOn(data.is_on);
         setLastActive(data.last_active);
+
+        // Fetch the new budget immediately so the progress bar reacts!
+        fetchSystemData();
+
     } catch (error) {
         console.error("Failed to toggle", error);
     } finally {
@@ -97,6 +122,15 @@ function RemoteControl() {
         </div>
       </div>
 
+      {/* --- LIVE V2 BUDGET WIDGET --- */}
+      <div style={{ marginTop: '20px' }}>
+        <BudgetWidget 
+          currentSpend={energySpend} 
+          budgetLimit={budgetLimit} 
+        />
+        {/* Note: The fake developer buttons have been permanently deleted! */}
+      </div>
+
       <div style={{ textAlign: 'center', marginTop: '40px' }}>
         <Link to="/room" style={{ color: '#38bdf8', textDecoration: 'none', fontSize: '14px' }}>Go to Room Simulator →</Link>
       </div>
@@ -108,7 +142,7 @@ function RemoteControl() {
 // --- 2. THE ROOM VIEW (For your Laptop Display) ---
 function RoomView() {
   const [isOn, setIsOn] = useState(false);
-  const apiUrl = 'https://smart-home-api-production.up.railway.app/api/light'; // REPLACE WITH ACTUAL IP
+  const apiUrl = 'https://smart-home-api-production.up.railway.app/api/light';
 
   useEffect(() => {
     const interval = setInterval(() => {
