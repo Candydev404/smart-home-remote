@@ -1,21 +1,40 @@
 {
-  "short_name": "SmartHome",
-  "name": "Smart Home Remote Control",
+  "short_name": "My Home",
+  "name": "Command Center | Smart Home System",
+  "description": "Enterprise-grade IoT Smart Home Control Panel. Engineered and developed by Fu'ad Harun (𝕮𝖆𝖓𝖉𝖞.𝕯𝖊𝖛).",
   "icons": [
     {
-      "src": "/logo.png",
+      "src": "/logo-192x192.png",
       "type": "image/png",
-      "sizes": "447x447"
+      "sizes": "192x192",
+      "purpose": "any maskable"
     },
     {
-      "src": "/logo.png",
+      "src": "/logo-512x512.png",
       "type": "image/png",
-      "sizes": "447x447"
+      "sizes": "512x512",
+      "purpose": "any maskable"
     }
   ],
-  "start_url": "/",
-  "background_color": "#0f172a",
+  "start_url": ".",
   "display": "standalone",
   "theme_color": "#0f172a",
-  "description": "Control your home lighting from anywhere."
+  "background_color": "#0f172a",
+  "orientation": "portrait-primary",
+  "shortcuts": [
+    {
+      "name": "Command Center",
+      "short_name": "Remote",
+      "description": "Open the main control dashboard",
+      "url": "/",
+      "icons": [{ "src": "/logo-192x192.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "Hardware Receiver",
+      "short_name": "Terminal",
+      "description": "Open the live /room simulator",
+      "url": "/room",
+      "icons": [{ "src": "/logo-192x192.png", "sizes": "192x192" }]
+    }
+  ]
 }
