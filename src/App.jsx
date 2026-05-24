@@ -79,12 +79,19 @@ function RemoteControl() {
       'intro': '/intro.mp3',
       'turn_on': '/turn_on.mp3',
       'turn_off': '/turn_off.mp3',
-      'error': '/error.mp3'
+      'error': '/error.mp3',
+
+      'developer': '/developer.mp3',
+      'tech_stack': '/stack.mp3',
+      'security': '/security.mp3',
+      'budget': '/budget.mp3',
+      'greeting': '/greeting.mp3',
+      'automation': '/automation.mp3'
     };
 
     if (audioMap[intent]) {
       const audio = new Audio(audioMap[intent]);
-      audio.play().catch(e => console.log("Audio play blocked by browser, user needs to interact first."));
+      audio.play().catch(e => console.log("Audio play blocked by browser, user need to interact first."));
     }
   };
 
@@ -104,16 +111,22 @@ function RemoteControl() {
     recognition.onresult = async (event) => {
       const command = event.results[0][0].transcript.toLowerCase();
       console.log("Heard:", command);
-      
-      if (command.includes('who are you') || command.includes('your name')) {
+
+      // 1. The Greetings
+      if (command.includes('hello') || command.includes('hi') || command.includes('hey') || command.includes('good morning') || command.includes('good afternoon') || command.includes('good evening')) {
+        playVoiceResponse('greeting');
+      }
+      // 2. The Identity
+      else if (command.includes('who are you') || command.includes('your name')) {
         playVoiceResponse('intro');
       }
-      else if (command.includes('turn on') || command.includes('light on')) {
+      // 3. The Core Light Controls
+      else if (command.includes('turn on') || command.includes('light on') || command.includes('puta')) {
         if (!isOn) {
-            await toggleLight(); 
+           toggleLight(); 
             playVoiceResponse('turn_on');
         } else {
-            console.log("Already on");
+          console.log("Already on");
         }
       } 
       else if (command.includes('turn off') || command.includes('light off') || command.includes('dark')) {
@@ -121,9 +134,31 @@ function RemoteControl() {
             await toggleLight(); 
             playVoiceResponse('turn_off');
         } else {
-             console.log("Already off");
+          console.log("Already off");
         }
       } 
+    
+      // 4. The Academic Flexes (Panel Questions)
+      else if (command.includes('who made you') || command.includes('who developed you') || command.includes('your creator')) {
+        playVoiceResponse('developer');
+      }
+
+      else if (command.includes('framework') || command.includes('tech stack') || command.includes('built with')) {
+        playVoiceResponse('tech_stack');
+      }
+
+      else if (commmand.includes('security') || command.includes('hack') || command.includes('safe')) {
+        playVoiceResponse('security');
+      }
+
+      else if (command.includes('budget') || command.includes('cost') || command.includes('energy')) {
+        playVoiceResponse('budget');
+      }
+
+      else if (command.includes('schedule') || command.includes('automate') || command.includes('routine') || command.includes('automation')) {
+        playVoiceResponse('automation');
+      }
+      // Catch-all Error
       else {
         playVoiceResponse('error');
       }
