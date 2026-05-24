@@ -3,12 +3,12 @@ import { BrowserRouter, Routes, Route, Link } from 'react-router-dom';
 import { Lightbulb, Power, Clock, Home, AlarmClock, Trash2, Shield, User, Radio, Mic } from 'lucide-react';
 import BudgetWidget from './components/BudgetWidget';
 
-// --- 1. THE COMMAND CENTER (With Jarvis Voice Control) ---
+// --- 1. THE COMMAND CENTER (With Zero-Cost Voice Control) ---
 function RemoteControl() {
   const [isOn, setIsOn] = useState(false);
   const [lastActive, setLastActive] = useState('Never');
   const [isLoading, setIsLoading] = useState(false);
-  const [isListening, setIsListening] = useState(false); // Jarvis State
+  const [isListening, setIsListening] = useState(false);
   
   // Budget & Scheduler State
   const [energySpend, setEnergySpend] = useState(0); 
@@ -18,11 +18,10 @@ function RemoteControl() {
   const [scheduleAction, setScheduleAction] = useState('off');
   const [isScheduling, setIsScheduling] = useState(false);
 
-  // RBAC Security State
+  // RBAC Security State (Persists after refresh!)
   const [userRole, setUserRole] = useState(() => {
-      // Check local storage first. If nothing is there, default to 'Admin'
-      return localStorage.getItem('smartHomeRole') || 'Admin';
-  }); 
+    return localStorage.getItem('smartHomeRole') || 'Admin';
+  });
   
   const baseUrl = 'https://smart-home-api-production.up.railway.app/api'; 
   const apiHeaders = { 'Accept': 'application/json', 'Content-Type': 'application/json', 'X-User-Role': userRole };
@@ -55,6 +54,7 @@ function RemoteControl() {
   };
 
   useEffect(() => {
+    fetchSystemData();
     localStorage.setItem('smartHomeRole', userRole);
   }, [userRole]);
 
@@ -73,7 +73,21 @@ function RemoteControl() {
     }
   };
 
-  // --- THE JARVIS ENGINE (Voice Control) ---
+  // --- THE ZERO-COST CLONED AUDIO ENGINE ---
+  const playVoiceResponse = (intent) => {
+    const audioMap = {
+      'intro': '/intro.mp3',
+      'turn_on': '/turn_on.mp3',
+      'turn_off': '/turn_off.mp3',
+      'error': '/error.mp3'
+    };
+
+    if (audioMap[intent]) {
+      const audio = new Audio(audioMap[intent]);
+      audio.play().catch(e => console.log("Audio play blocked by browser, user needs to interact first."));
+    }
+  };
+
   const activateJarvis = () => {
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (!SpeechRecognition) {
@@ -89,20 +103,37 @@ function RemoteControl() {
     
     recognition.onresult = async (event) => {
       const command = event.results[0][0].transcript.toLowerCase();
+      console.log("Heard:", command);
       
-      // Artificial Intelligence Logic
-      if (command.includes('turn on') || command.includes('light on')) {
-        if (!isOn) await toggleLight(); // Only toggle if it's currently OFF
+      if (command.includes('who are you') || command.includes('your name')) {
+        playVoiceResponse('intro');
+      }
+      else if (command.includes('turn on') || command.includes('light on')) {
+        if (!isOn) {
+            await toggleLight(); 
+            playVoiceResponse('turn_on');
+        } else {
+            console.log("Already on");
+        }
       } 
-      else if (command.includes('turn off') || command.includes('light off')) {
-        if (isOn) await toggleLight(); // Only toggle if it's currently ON
+      else if (command.includes('turn off') || command.includes('light off') || command.includes('dark')) {
+        if (isOn) {
+            await toggleLight(); 
+            playVoiceResponse('turn_off');
+        } else {
+             console.log("Already off");
+        }
       } 
       else {
-        alert(`Jarvis heard: "${command}". Try saying "Turn on the light" or "Turn off the light".`);
+        playVoiceResponse('error');
       }
     };
 
-    recognition.onerror = () => setIsListening(false);
+    recognition.onerror = () => {
+        setIsListening(false);
+        playVoiceResponse('error');
+    };
+    
     recognition.onend = () => setIsListening(false);
 
     recognition.start();
