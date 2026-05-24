@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { BrowserRouter, Routes, Route, Link } from 'react-router-dom';
-import { Lightbulb, Power, Clock, Home } from 'lucide-react';
+import { Lightbulb, Power, Clock, Home, AlarmClock, Trash2 } from 'lucide-react';
 import BudgetWidget from './components/BudgetWidget';
 
 // --- 1. THE PREMIUM REMOTE CONTROL (V2) ---
@@ -9,14 +9,19 @@ function RemoteControl() {
   const [lastActive, setLastActive] = useState('Never');
   const [isLoading, setIsLoading] = useState(false);
   
-  // LIVE Budget State
-  const [energySpend, setEnergySpend] = useState(0); // Starts at 0 until API loads
-  const budgetLimit = 5000; // Your monthly limit
+  // Budget State
+  const [energySpend, setEnergySpend] = useState(0); 
+  const budgetLimit = 5000; 
+
+  // --- NEW: Scheduler State ---
+  const [schedules, setSchedules] = useState([]);
+  const [scheduleTime, setScheduleTime] = useState('');
+  const [scheduleAction, setScheduleAction] = useState('off');
+  const [isScheduling, setIsScheduling] = useState(false);
   
-  // Using a cleaner base URL to handle multiple routes
+  // Base URL
   const baseUrl = 'https://smart-home-api-production.up.railway.app/api'; 
 
-  // NEW: A unified function to fetch everything at once
   const fetchSystemData = async () => {
     try {
       // 1. Fetch Light Status
@@ -29,13 +34,17 @@ function RemoteControl() {
       const budgetRes = await fetch(`${baseUrl}/budget/current`);
       const budgetData = await budgetRes.json();
       setEnergySpend(budgetData.current_spend);
+
+      // 3. NEW: Fetch Active Schedules
+      const scheduleRes = await fetch(`${baseUrl}/schedules`);
+      const scheduleData = await scheduleRes.json();
+      setSchedules(scheduleData);
       
     } catch (err) {
       console.error("API Connection Error:", err);
     }
   };
 
-  // Run the fetcher when the app first loads
   useEffect(() => {
     fetchSystemData();
   }, []);
@@ -49,19 +58,47 @@ function RemoteControl() {
         });
         const data = await response.json();
         
-        // Update Light UI
         setIsOn(data.is_on);
         setLastActive(data.last_active);
-
-        // Fetch the new budget immediately so the progress bar reacts!
         fetchSystemData();
-
     } catch (error) {
         console.error("Failed to toggle", error);
     } finally {
         setIsLoading(false);
     }
-  }
+  };
+
+  // --- NEW: Scheduler Functions ---
+  const handleAddSchedule = async (e) => {
+    e.preventDefault();
+    if (!scheduleTime) return;
+    
+    setIsScheduling(true);
+    try {
+        await fetch(`${baseUrl}/schedules`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ action: scheduleAction, scheduled_time: scheduleTime })
+        });
+        
+        // Refresh the list and clear the input
+        fetchSystemData();
+        setScheduleTime(''); 
+    } catch (error) {
+        console.error("Failed to set schedule", error);
+    } finally {
+        setIsScheduling(false);
+    }
+  };
+
+  const handleDeleteSchedule = async (id) => {
+    try {
+        await fetch(`${baseUrl}/schedules/${id}`, { method: 'DELETE' });
+        fetchSystemData(); // Refresh the list
+    } catch (error) {
+        console.error("Failed to delete schedule", error);
+    }
+  };
 
   return (
     <div style={{ minHeight: '100vh', backgroundColor: '#0f172a', color: 'white', padding: '20px', fontFamily: 'system-ui, sans-serif' }}>
@@ -79,8 +116,6 @@ function RemoteControl() {
 
       {/* Smart Card Grid */}
       <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '20px' }}>
-        
-        {/* Living Room Light Card */}
         <div 
           onClick={!isLoading ? toggleLight : undefined}
           style={{ 
@@ -107,7 +142,6 @@ function RemoteControl() {
             </p>
           </div>
         </div>
-
       </div>
 
       {/* Activity Log */}
@@ -122,13 +156,77 @@ function RemoteControl() {
         </div>
       </div>
 
-      {/* --- LIVE V2 BUDGET WIDGET --- */}
+      {/* --- INJECTED V2 BUDGET WIDGET --- */}
       <div style={{ marginTop: '20px' }}>
         <BudgetWidget 
           currentSpend={energySpend} 
           budgetLimit={budgetLimit} 
         />
-        {/* Note: The fake developer buttons have been permanently deleted! */}
+      </div>
+
+      {/* --- INJECTED V2 SCHEDULER WIDGET --- */}
+      <div style={{ marginTop: '20px', backgroundColor: '#1e293b', borderRadius: '20px', padding: '20px', boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)' }}>
+        
+        {/* Scheduler Header */}
+        <div style={{ display: 'flex', alignItems: 'center', marginBottom: '20px' }}>
+          <AlarmClock size={20} color="#38bdf8" style={{ marginRight: '10px' }} />
+          <h3 style={{ margin: 0, fontSize: '18px', color: 'white', fontWeight: 'bold' }}>Automated Routines</h3>
+        </div>
+
+        {/* Input Form */}
+        <form onSubmit={handleAddSchedule} style={{ display: 'flex', gap: '10px', marginBottom: '20px' }}>
+          <input 
+            type="time" 
+            value={scheduleTime} 
+            onChange={(e) => setScheduleTime(e.target.value)} 
+            required 
+            style={{ padding: '12px', borderRadius: '8px', border: 'none', backgroundColor: '#334155', color: 'white', flex: 1, outline: 'none' }} 
+            // Color scheme to ensure the clock icon on mobile doesn't hide
+            color-scheme="dark"
+          />
+          <select 
+            value={scheduleAction} 
+            onChange={(e) => setScheduleAction(e.target.value)} 
+            style={{ padding: '12px', borderRadius: '8px', border: 'none', backgroundColor: '#334155', color: 'white', outline: 'none' }}
+          >
+            <option value="on">Turn ON</option>
+            <option value="off">Turn OFF</option>
+          </select>
+          <button 
+            type="submit" 
+            disabled={isScheduling} 
+            style={{ padding: '12px 20px', borderRadius: '8px', border: 'none', backgroundColor: '#38bdf8', color: 'white', fontWeight: 'bold', cursor: 'pointer' }}
+          >
+            {isScheduling ? '...' : 'Set'}
+          </button>
+        </form>
+
+        {/* Active Schedules List */}
+        <div>
+          {schedules.length === 0 ? (
+            <p style={{ color: '#94a3b8', fontSize: '14px', margin: 0, textAlign: 'center', padding: '10px' }}>No active routines.</p>
+          ) : (
+            schedules.map((sched) => (
+              <div key={sched.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#334155', padding: '12px 16px', borderRadius: '12px', marginBottom: '10px' }}>
+                <div>
+                  <p style={{ margin: 0, color: 'white', fontWeight: 'bold', fontSize: '15px' }}>
+                    Turn {sched.action.toUpperCase()}
+                  </p>
+                  <p style={{ margin: '4px 0 0 0', color: '#94a3b8', fontSize: '13px', display: 'flex', alignItems: 'center', gap: '5px' }}>
+                    <Clock size={12} /> {sched.scheduled_time.substring(0, 5)}
+                  </p>
+                </div>
+                <button 
+                  onClick={() => handleDeleteSchedule(sched.id)} 
+                  style={{ background: 'rgba(239, 68, 68, 0.1)', border: 'none', cursor: 'pointer', padding: '8px', borderRadius: '8px', display: 'flex', alignItems: 'center' }}
+                >
+                  <Trash2 size={18} color="#ef4444" />
+                </button>
+              </div>
+            ))
+          )}
+        </div>
+
       </div>
 
       <div style={{ textAlign: 'center', marginTop: '40px' }}>
@@ -142,11 +240,11 @@ function RemoteControl() {
 // --- 2. THE ROOM VIEW (For your Laptop Display) ---
 function RoomView() {
   const [isOn, setIsOn] = useState(false);
-  const apiUrl = 'https://smart-home-api-production.up.railway.app/api/light';
+  const apiUrl = 'https://smart-home-api-production.up.railway.app/api';
 
   useEffect(() => {
     const interval = setInterval(() => {
-        fetch(`${apiUrl}/status`)
+        fetch(`${apiUrl}/light/status`)
           .then(res => res.json())
           .then(data => setIsOn(data.is_on))
           .catch(err => console.error("API error", err));
