@@ -75,20 +75,32 @@ function RemoteControl() {
     
     setIsScheduling(true);
     try {
-        await fetch(`${baseUrl}/schedules`, {
+        const response = await fetch(`${baseUrl}/schedules`, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: {
+              'Accept': 'application/json',
+               'Content-Type': 'application/json' 
+              },
             body: JSON.stringify({ action: scheduleAction, scheduled_time: scheduleTime })
         });
-        
-        // Refresh the list and clear the input
+
+        const data = await response.json();
+
+        //If Lavarel rejects the data, pop up an alert on your phone!
+        if (!response.ok)  {
+          alert("Backend Error: + JSON.stringify(data");
+          console.error("Error payload:", data);
+        } else {
+          // Success! Refresh the list and clear the input
         fetchSystemData();
-        setScheduleTime(''); 
-    } catch (error) {
-        console.error("Failed to set schedule", error);
-    } finally {
+        setScheduleTime('');
+        }
+      } catch (error) {
+        alert("Network Error: Check your terminal.");
+        Console.error("Failed to set schedule", error);
+      } finally {
         setIsScheduling(false);
-    }
+      }
   };
 
   const handleDeleteSchedule = async (id) => {
