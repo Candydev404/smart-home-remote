@@ -82,7 +82,7 @@ function RemoteControl() {
       'error': '/error.mp3',
 
       'developer': '/developer.mp3',
-      'tech_stack': '/stack.mp3',
+      'tech_stack': '/tech_stack.mp3',
       'security': '/security.mp3',
       'budget': '/budget.mp3',
       'greeting': '/greeting.mp3',
