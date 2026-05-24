@@ -1,14 +1,22 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { BrowserRouter, Routes, Route, Link } from 'react-router-dom';
-import { Lightbulb, Power, Clock, Home, AlarmClock, Trash2, Shield, User, Radio, Mic } from 'lucide-react';
+import { Lightbulb, Power, Clock, Home, AlarmClock, Trash2, Shield, User, Radio, Mic, MicOff } from 'lucide-react';
 import BudgetWidget from './components/BudgetWidget';
 
-// --- 1. THE COMMAND CENTER (With Biometric UI & AI Engine) ---
+// --- 1. THE COMMAND CENTER ---
 function RemoteControl() {
   const [isOn, setIsOn] = useState(false);
   const [lastActive, setLastActive] = useState('Never');
   const [isLoading, setIsLoading] = useState(false);
-  const [isListening, setIsListening] = useState(false);
+  
+  // Voice Engine States
+  const [isListening, setIsListening] = useState(false); // Is the physical mic on?
+  const [isAwake, setIsAwake] = useState(false); // Is the AI listening to commands?
+  
+  // We use refs for the audio engine to avoid React stale closure bugs
+  const recognitionRef = useRef(null);
+  const aiAwakeRef = useRef(false);
+  const isListeningRef = useRef(false);
   
   // Budget & Scheduler State
   const [energySpend, setEnergySpend] = useState(0); 
@@ -22,7 +30,7 @@ function RemoteControl() {
   const [userRole, setUserRole] = useState(() => localStorage.getItem('smartHomeRole') || 'Admin');
   const [showScanner, setShowScanner] = useState(false);
   const [scanProgress, setScanProgress] = useState(0);
-  const [scanStatus, setScanStatus] = useState('AWAITING INPUT'); // AWAITING, SCANNING, GRANTED, DENIED
+  const [scanStatus, setScanStatus] = useState('AWAITING INPUT');
   
   const baseUrl = 'https://smart-home-api-production.up.railway.app/api'; 
   const apiHeaders = { 'Accept': 'application/json', 'Content-Type': 'application/json', 'X-User-Role': userRole };
@@ -58,30 +66,81 @@ function RemoteControl() {
     } catch (error) { console.error(error); } finally { setIsLoading(false); }
   };
 
-  // --- THE AI AUDIO ENGINE (10 Voices) ---
+  // --- THE AI AUDIO ENGINE ---
   const playVoiceResponse = (intent) => {
     const audioMap = { 'intro': '/intro.mp3', 'turn_on': '/turn_on.mp3', 'turn_off': '/turn_off.mp3', 'error': '/error.mp3', 'developer': '/developer.mp3', 'tech_stack': '/tech_stack.mp3', 'security': '/security.mp3', 'budget': '/budget.mp3', 'greeting': '/greeting.mp3', 'automation': '/automation.mp3' };
     if (audioMap[intent]) new Audio(audioMap[intent]).play().catch(() => {});
   };
 
-  // --- THE CONTINUOUS LISTENING ENGINE ---
-  const activateJarvis = () => {
-    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-    if (!SpeechRecognition) return alert("Requires Chrome");
-    const recognition = new SpeechRecognition();
-    recognition.lang = 'en-US'; recognition.continuous = true; recognition.interimResults = false;
-    
-    recognition.onstart = () => setIsListening(true);
-    recognition.onresult = async (event) => {
-      const command = event.results[event.resultIndex][0].transcript.toLowerCase().replace(/[.,\/#!$%\^&\*;:{}=\-_`~()]/g, "").trim();
-      
-      console.log(`================================`);
-      console.log(`🎤 AI HEARD EXACTLY: "${command}"`);
-      console.log(`================================`);
+  // Helper to sync state and refs instantly
+  const setAwakeState = (state) => {
+    setIsAwake(state);
+    aiAwakeRef.current = state;
+  };
 
-      if (command.includes('stop listening') || command.includes('sleep') || command.includes('shut down')) { playVoiceResponse('turn_off'); recognition.stop(); return; }
-      else if (command.includes('hello') || command.includes('hi') || command.includes('hey') || command.includes('good morning') || command.includes('good afternoon')) playVoiceResponse('greeting');
-      else if (command.includes('who are you') || command.includes('your name')) playVoiceResponse('intro');
+  const setListeningState = (state) => {
+    setIsListening(state);
+    isListeningRef.current = state;
+  };
+
+  // --- THE PERSISTENT STANDBY ENGINE ---
+  const toggleVoiceEngine = () => {
+    // If it's already on, user clicking the button acts as a Master Kill Switch
+    if (isListeningRef.current) {
+      setListeningState(false);
+      setAwakeState(false);
+      if (recognitionRef.current) recognitionRef.current.stop();
+      return;
+    }
+
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SpeechRecognition) return alert("Voice control requires Google Chrome.");
+    
+    const recognition = new SpeechRecognition();
+    recognitionRef.current = recognition;
+    recognition.lang = 'en-US'; 
+    recognition.continuous = true; // Stay on for multiple sentences
+    recognition.interimResults = false;
+    
+    recognition.onstart = () => {
+      setListeningState(true);
+      setAwakeState(true); // Wakes up automatically when manually clicked
+      console.log("Mic is LIVE. AI is Awake.");
+    };
+    
+    recognition.onresult = async (event) => {
+      // Added single quote to the regex stripper so "fu'ad" becomes "fuad" cleanly
+      const command = event.results[event.resultIndex][0].transcript.toLowerCase().replace(/[.,\/#!$%\^&\*;:{}=\-_`~()']/g, "").trim();
+      
+      console.log(`🎤 HEARD: "${command}"`);
+
+      // 1. WAKE WORD LOGIC (Works even if AI is asleep)
+      if (!aiAwakeRef.current) {
+        if (command.includes('wake up') || command.includes('hello') || command.includes('fuad')) {
+          setAwakeState(true);
+          playVoiceResponse('greeting');
+        }
+        return; // If asleep, ignore everything else
+      }
+
+      // 2. SLEEP LOGIC (Put AI in Standby)
+      if (command.includes('sleep') || command.includes('standby') || command.includes('stop listening')) {
+        setAwakeState(false);
+        playVoiceResponse('turn_off'); 
+        return; 
+      }
+
+      // 3. MASTER KILL SWITCH VIA VOICE (Turns mic completely off)
+      if (command.includes('shut down system') || command.includes('disable microphone')) {
+        setListeningState(false);
+        setAwakeState(false);
+        playVoiceResponse('turn_off');
+        recognition.stop();
+        return;
+      }
+
+      // 4. NORMAL SMART HOME COMMANDS
+      if (command.includes('who are you') || command.includes('your name')) playVoiceResponse('intro');
       else if (command.includes('turn on') || command.includes('light on')) { if (!isOn) { await toggleLight(); playVoiceResponse('turn_on'); } } 
       else if (command.includes('turn off') || command.includes('light off') || command.includes('dark')) { if (isOn) { await toggleLight(); playVoiceResponse('turn_off'); } } 
       else if (command.includes('developer') || command.includes('creator') || command.includes('who made you')) playVoiceResponse('developer');
@@ -91,13 +150,29 @@ function RemoteControl() {
       else if (command.includes('automate') || command.includes('routine') || command.includes('schedule') || command.includes('automation')) playVoiceResponse('automation'); 
       else if (command.length > 3) playVoiceResponse('error');
     };
-    recognition.onerror = () => setIsListening(false);
-    recognition.onend = () => setIsListening(false);
+
+    // THE GHOST RESTART: Defeat Chrome's 60-second silence timeout
+    recognition.onend = () => {
+      if (isListeningRef.current) {
+        console.log("Chrome auto-stopped mic. Ghost restarting...");
+        try { recognition.start(); } catch (e) {}
+      } else {
+        console.log("Mic completely disabled.");
+      }
+    };
+
+    recognition.onerror = (e) => {
+      if (e.error === 'not-allowed') {
+        setListeningState(false);
+        setAwakeState(false);
+      }
+    };
+
     recognition.start();
   };
 
   // --- Scheduler Functions ---
-  const handleAddSchedule = async (e) => {
+  const handleAddSchedule = async (e) => { 
     e.preventDefault(); if (!scheduleTime) return; setIsScheduling(true);
     try {
         const response = await fetch(`${baseUrl}/schedules`, { method: 'POST', headers: apiHeaders, body: JSON.stringify({ action: scheduleAction, scheduled_time: scheduleTime }) });
@@ -105,19 +180,14 @@ function RemoteControl() {
     } catch (error) {} finally { setIsScheduling(false); }
   };
 
-  const handleDeleteSchedule = async (id) => {
+  const handleDeleteSchedule = async (id) => { 
     try { await fetch(`${baseUrl}/schedules/${id}`, { method: 'DELETE', headers: apiHeaders }); fetchSystemData(); } catch (error) {}
   };
 
   // --- THE BIOMETRIC SECURITY PROTOCOL ---
   const handleRoleSwitchRequest = () => {
-    if (userRole === 'Admin') {
-      setUserRole('Guest');
-    } else {
-      setShowScanner(true);
-      setScanStatus('AWAITING INPUT');
-      setScanProgress(0);
-    }
+    if (userRole === 'Admin') setUserRole('Guest');
+    else { setShowScanner(true); setScanStatus('AWAITING INPUT'); setScanProgress(0); }
   };
 
   useEffect(() => {
@@ -130,15 +200,10 @@ function RemoteControl() {
       interval = setInterval(() => {
         setScanProgress((prev) => {
           if (prev >= 100) {
-            clearInterval(interval);
-            setScanStatus('GRANTED');
+            clearInterval(interval); setScanStatus('GRANTED');
             const winOsc = ctx.createOscillator(); winOsc.type = 'sine'; winOsc.frequency.value = 1200;
             winOsc.connect(ctx.destination); winOsc.start(); winOsc.stop(ctx.currentTime + 0.5);
-            
-            setTimeout(() => {
-              setUserRole('Admin');
-              setShowScanner(false);
-            }, 1000); 
+            setTimeout(() => { setUserRole('Admin'); setShowScanner(false); }, 1000); 
             return 100;
           }
           return prev + 5; 
@@ -150,11 +215,14 @@ function RemoteControl() {
 
   const startScan = () => { if (scanStatus !== 'GRANTED') setScanStatus('SCANNING'); };
   const stopScan = () => {
-    if (scanStatus === 'SCANNING') {
-      setScanStatus('DENIED');
-      setScanProgress(0);
-      setTimeout(() => setScanStatus('AWAITING INPUT'), 1500);
-    }
+    if (scanStatus === 'SCANNING') { setScanStatus('DENIED'); setScanProgress(0); setTimeout(() => setScanStatus('AWAITING INPUT'), 1500); }
+  };
+
+  // Determine button color based on engine state
+  const getMicColor = () => {
+    if (!isListening) return '#3b82f6'; // Blue: Off, ready to start
+    if (isAwake) return '#ef4444'; // Red Pulsing: Live and listening
+    return '#f59e0b'; // Amber: Mic is on, but AI is asleep (Standby)
   };
 
   return (
@@ -168,15 +236,13 @@ function RemoteControl() {
           <p style={{ color: scanStatus === 'DENIED' ? '#ef4444' : '#94a3b8', height: '20px', fontWeight: 'bold' }}>{scanStatus}</p>
           
           <div 
-            onMouseDown={startScan} onMouseUp={stopScan} onMouseLeave={stopScan}
-            onTouchStart={startScan} onTouchEnd={stopScan}
+            onMouseDown={startScan} onMouseUp={stopScan} onMouseLeave={stopScan} onTouchStart={startScan} onTouchEnd={stopScan}
             style={{ marginTop: '40px', width: '120px', height: '120px', borderRadius: '50%', border: `4px solid ${scanStatus === 'GRANTED' ? '#22c55e' : '#334155'}`, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', position: 'relative', overflow: 'hidden', userSelect: 'none' }}
           >
             <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, height: `${scanProgress}%`, backgroundColor: '#38bdf8', opacity: 0.3, transition: 'height 0.1s linear' }} />
             <User size={48} color={scanProgress > 0 ? '#38bdf8' : '#64748b'} />
           </div>
           <p style={{ marginTop: '30px', color: '#64748b', fontSize: '14px' }}>Press and hold to verify identity</p>
-          
           <button onClick={() => setShowScanner(false)} style={{ marginTop: '40px', background: 'none', border: '1px solid #334155', color: '#94a3b8', padding: '10px 20px', borderRadius: '8px', cursor: 'pointer' }}>Cancel</button>
         </div>
       )}
@@ -198,10 +264,23 @@ function RemoteControl() {
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '30px' }}>
         <div>
           <h1 style={{ margin: 0, fontSize: '28px', fontWeight: 'bold' }}>Command Center</h1>
-          <p style={{ margin: 0, color: '#94a3b8' }}>Smart Home Control</p>
+          <p style={{ margin: 0, color: '#94a3b8' }}>
+             {isListening ? (isAwake ? '🟢 AI is Awake' : '🟡 AI is Asleep') : '🔴 Audio Offline'}
+          </p>
         </div>
-        <button onClick={activateJarvis} style={{ backgroundColor: isListening ? '#ef4444' : '#3b82f6', border: 'none', borderRadius: '50%', padding: '15px', cursor: 'pointer', boxShadow: isListening ? '0 0 20px rgba(239, 68, 68, 0.6)' : '0 0 10px rgba(59, 130, 246, 0.4)', transition: 'all 0.3s ease', animation: isListening ? 'pulse 1s infinite' : 'none' }}>
-          <Mic color="white" size={24} />
+        
+        {/* THE MASTER AUDIO TOGGLE BUTTON */}
+        <button 
+          onClick={toggleVoiceEngine} 
+          style={{ 
+            backgroundColor: getMicColor(), 
+            border: 'none', borderRadius: '50%', padding: '15px', cursor: 'pointer', 
+            boxShadow: isListening && isAwake ? '0 0 20px rgba(239, 68, 68, 0.6)' : 'none', 
+            transition: 'all 0.3s ease', 
+            animation: isListening && isAwake ? 'pulse 1s infinite' : 'none' 
+          }}
+        >
+          {isListening ? <Mic color="white" size={24} /> : <MicOff color="white" size={24} />}
         </button>
       </div>
 
