@@ -19,7 +19,10 @@ function RemoteControl() {
   const [isScheduling, setIsScheduling] = useState(false);
 
   // RBAC Security State
-  const [userRole, setUserRole] = useState('Admin'); 
+  const [userRole, setUserRole] = useState(() => {
+      // Check local storage first. If nothing is there, default to 'Admin'
+      return localStorage.getItem('smartHomeRole') || 'Admin';
+  }); 
   
   const baseUrl = 'https://smart-home-api-production.up.railway.app/api'; 
   const apiHeaders = { 'Accept': 'application/json', 'Content-Type': 'application/json', 'X-User-Role': userRole };
@@ -52,7 +55,7 @@ function RemoteControl() {
   };
 
   useEffect(() => {
-    fetchSystemData();
+    localStorage.setItem('smartHomeRole', userRole);
   }, [userRole]);
 
   const toggleLight = async () => {
