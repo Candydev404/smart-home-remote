@@ -20,7 +20,7 @@ function RemoteControl() {
   
   // Budget & Scheduler State
   const [energySpend, setEnergySpend] = useState(0); 
-  const budgetLimit = 5000; 
+  const budgetLimit = 1000; 
   const [schedules, setSchedules] = useState([]);
   const [scheduleTime, setScheduleTime] = useState('');
   const [scheduleAction, setScheduleAction] = useState('off');
@@ -68,7 +68,7 @@ function RemoteControl() {
 
   // --- THE AI AUDIO ENGINE ---
   const playVoiceResponse = (intent) => {
-    const audioMap = { 'intro': '/intro.mp3', 'turn_on': '/turn_on.mp3', 'turn_off': '/turn_off.mp3', 'error': '/error.mp3', 'developer': '/developer.mp3', 'tech_stack': '/tech_stack.mp3', 'security': '/security.mp3', 'budget': '/budget.mp3', 'greeting': '/greeting.mp3', 'automation': '/automation.mp3' };
+    const audioMap = { 'intro': '/intro.mp3', 'turn_on': '/turn_on.mp3', 'turn_off': '/turn_off.mp3', 'error': '/error.mp3', 'developer': '/developer.mp3', 'tech_stack': '/tech_stack.mp3', 'security': '/security.mp3', 'budget': '/budget.mp3', 'greeting': '/greeting.mp3', 'automation': '/automation.mp3', 'shutdown': '/shutdown.mp3' };
     if (audioMap[intent]) new Audio(audioMap[intent]).play().catch(() => {});
   };
 
@@ -116,7 +116,7 @@ function RemoteControl() {
 
       // 1. WAKE WORD LOGIC (Works even if AI is asleep)
       if (!aiAwakeRef.current) {
-        if (command.includes('wake up') || command.includes('hello') || command.includes('fuad')) {
+        if (command.includes('wake up') || command.includes('hello') || command.includes('fuad') || command.includes('hey') || command.includes('buddy') || command.includes('how far') || command.includes('wagwan')) {
           setAwakeState(true);
           playVoiceResponse('greeting');
         }
@@ -124,7 +124,7 @@ function RemoteControl() {
       }
 
       // 2. SLEEP LOGIC (Put AI in Standby)
-      if (command.includes('sleep') || command.includes('standby') || command.includes('stop listening')) {
+      if (command.includes('sleep') || command.includes('standby') || command.includes('stop listening') || command.includes('abeg shift') || command.includes('rest')) {
         setAwakeState(false);
         playVoiceResponse('turn_off'); 
         return; 
@@ -134,17 +134,17 @@ function RemoteControl() {
       if (command.includes('shut down system') || command.includes('disable microphone')) {
         setListeningState(false);
         setAwakeState(false);
-        playVoiceResponse('turn_off');
+        playVoiceResponse('shutdown');
         recognition.stop();
         return;
       }
 
       // 4. NORMAL SMART HOME COMMANDS
       if (command.includes('who are you') || command.includes('your name')) playVoiceResponse('intro');
-      else if (command.includes('turn on') || command.includes('light on')) { if (!isOn) { await toggleLight(); playVoiceResponse('turn_on'); } } 
+      else if (command.includes('turn on') || command.includes('light on') || command.includes('puta')) { if (!isOn) { await toggleLight(); playVoiceResponse('turn_on'); } } 
       else if (command.includes('turn off') || command.includes('light off') || command.includes('dark')) { if (isOn) { await toggleLight(); playVoiceResponse('turn_off'); } } 
-      else if (command.includes('developer') || command.includes('creator') || command.includes('who made you')) playVoiceResponse('developer');
-      else if (command.includes('stack') || command.includes('framework') || command.includes('built with')) playVoiceResponse('tech_stack');
+      else if (command.includes('developer') || command.includes('creator') || command.includes('who made you') || command.includes('who created you') || command.includes('who do you serve')) playVoiceResponse('developer');
+      else if (command.includes('stack') || command.includes('framework') || command.includes('built with') || command.includes('with')) playVoiceResponse('tech_stack');
       else if (command.includes('security') || command.includes('role') || command.includes('safe')) playVoiceResponse('security');
       else if (command.includes('budget') || command.includes('energy') || command.includes('cost')) playVoiceResponse('budget');
       else if (command.includes('automate') || command.includes('routine') || command.includes('schedule') || command.includes('automation')) playVoiceResponse('automation'); 
