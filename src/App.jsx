@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { BrowserRouter, Routes, Route, Link, useNavigate } from 'react-router-dom';
-import { Lightbulb, Power, Clock, AlarmClock, Trash2, Shield, User, Radio, Mic, MicOff, BookOpen, ChevronLeft, GraduationCap, Settings, ShieldCheck, Palette } from 'lucide-react';
+import { Lightbulb, Power, Clock, AlarmClock, Trash2, Shield, User, Radio, Mic, MicOff, BookOpen, ChevronLeft, GraduationCap, Settings, ShieldCheck } from 'lucide-react';
 import BudgetWidget from './components/BudgetWidget';
 
 const colorMap = {
@@ -15,7 +15,7 @@ const colorMap = {
 // --- 1. THE COMMAND CENTER ---
 function RemoteControl() {
   const [isOn, setIsOn] = useState(false);
-  const [lightColor, setLightColor] = useState(colorMap['yellow']); // Default color
+  const [lightColor, setLightColor] = useState(colorMap['yellow']); 
   const [lastActive, setLastActive] = useState('Never');
   const [isLoading, setIsLoading] = useState(false);
   
@@ -27,7 +27,6 @@ function RemoteControl() {
   const aiAwakeRef = useRef(false);
   const isListeningRef = useRef(false);
   
-  // Budget & Scheduler State
   const [energySpend, setEnergySpend] = useState(0); 
   const budgetLimit = 5000; 
   const [schedules, setSchedules] = useState([]);
@@ -35,7 +34,6 @@ function RemoteControl() {
   const [scheduleAction, setScheduleAction] = useState('off');
   const [isScheduling, setIsScheduling] = useState(false);
 
-  // RBAC & Security State
   const [userRole, setUserRole] = useState(() => localStorage.getItem('smartHomeRole') || 'Admin');
   const [showScanner, setShowScanner] = useState(false);
   const [scanProgress, setScanProgress] = useState(0);
@@ -44,28 +42,37 @@ function RemoteControl() {
   const baseUrl = 'https://smart-home-api-production.up.railway.app/api'; 
   const apiHeaders = { 'Accept': 'application/json', 'Content-Type': 'application/json', 'X-User-Role': userRole };
 
-  // Setup Broadcast Channel for instant presentation sync
-  const channelRef = useRef(null);
-  useEffect(() => {
-    channelRef.current = new BroadcastChannel('smart_home_rgb');
-    return () => channelRef.current.close();
-  }, []);
-
-  const changeColor = (hexCode) => {
+  // --- THE NEW CLOUD COLOR SYNC ---
+  const changeColor = async (hexCode) => {
     setLightColor(hexCode);
-    if (channelRef.current) {
-      channelRef.current.postMessage({ type: 'COLOR_CHANGE', color: hexCode });
+    try {
+      await fetch(`${baseUrl}/light/color`, {
+        method: 'POST',
+        headers: apiHeaders,
+        body: JSON.stringify({ color: hexCode })
+      });
+    } catch (e) {
+      console.error("Failed to sync color to cloud");
     }
   };
 
   const fetchSystemData = async () => {
     try {
+      // Fetch Power
       const lightRes = await fetch(`${baseUrl}/light/status`, { headers: apiHeaders });
       if (lightRes.ok) {
         const lightData = await lightRes.json();
         setIsOn(lightData.is_on);
         setLastActive(lightData.last_active || 'Never');
       }
+      
+      // Fetch Current Cloud Color
+      const colorRes = await fetch(`${baseUrl}/light/color`, { headers: apiHeaders });
+      if (colorRes.ok) {
+        const colorData = await colorRes.json();
+        if (colorData.color) setLightColor(colorData.color);
+      }
+
       if (userRole === 'Admin') {
         const budgetRes = await fetch(`${baseUrl}/budget/current`, { headers: apiHeaders });
         if (budgetRes.ok) setEnergySpend((await budgetRes.json()).current_spend);
@@ -89,7 +96,6 @@ function RemoteControl() {
     } catch (error) { console.error(error); } finally { setIsLoading(false); }
   };
 
-  // --- THE AI AUDIO ENGINE ---
   const playVoiceResponse = (intent) => {
     const audioMap = { 'intro': '/intro.mp3', 'turn_on': '/turn_on.mp3', 'turn_off': '/turn_off.mp3', 'error': '/error.mp3', 'developer': '/developer.mp3', 'tech_stack': '/tech_stack.mp3', 'security': '/security.mp3', 'budget': '/budget.mp3', 'greeting': '/greeting.mp3', 'automation': '/automation.mp3', 'shut_down': '/shutdown.mp3' };
     if (audioMap[intent]) new Audio(audioMap[intent]).play().catch(() => {});
@@ -98,7 +104,6 @@ function RemoteControl() {
   const setAwakeState = (state) => { setIsAwake(state); aiAwakeRef.current = state; };
   const setListeningState = (state) => { setIsListening(state); isListeningRef.current = state; };
 
-  // --- THE PERSISTENT STANDBY ENGINE ---
   const toggleVoiceEngine = () => {
     if (isListeningRef.current) {
       setListeningState(false); setAwakeState(false);
@@ -139,20 +144,18 @@ function RemoteControl() {
         setListeningState(false); setAwakeState(false); playVoiceResponse('turn_off'); recognition.stop(); return;
       }
 
-      // --- THE RGB COLOR RECOGNITION ENGINE ---
       let colorTriggered = false;
       for (const [colorName, hexCode] of Object.entries(colorMap)) {
         if (command.includes(colorName) && (command.includes('light') || command.includes('color') || command.includes('change') || command.includes('turn'))) {
-          changeColor(hexCode);
-          if (!isOn) await toggleLight(); // Auto turn on if it's currently off
-          playVoiceResponse('turn_on'); // Play confirmation
+          await changeColor(hexCode); // Sync to Laravel
+          if (!isOn) await toggleLight(); 
+          playVoiceResponse('turn_on'); 
           colorTriggered = true;
           break;
         }
       }
-      if (colorTriggered) return; // Stop executing if a color was matched
+      if (colorTriggered) return; 
 
-      // Normal Commands
       if (command.includes('who are you') || command.includes('your name')) playVoiceResponse('intro');
       else if (command.includes('turn on') || command.includes('light on')) { if (!isOn) { await toggleLight(); playVoiceResponse('turn_on'); } } 
       else if (command.includes('turn off') || command.includes('light off') || command.includes('dark')) { if (isOn) { await toggleLight(); playVoiceResponse('turn_off'); } } 
@@ -264,7 +267,6 @@ function RemoteControl() {
         </button>
       </div>
 
-      {/* --- UPGRADED RGB LIGHT CARD --- */}
       <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '20px' }}>
         <div onClick={!isLoading ? toggleLight : undefined} style={{ backgroundColor: isOn ? '#1e293b' : '#0f172a', border: `1px solid ${isOn ? lightColor : '#334155'}`, borderRadius: '24px', padding: '24px', cursor: 'pointer', transition: 'all 0.3s ease', boxShadow: isOn ? `0 10px 30px -5px ${lightColor}66` : 'none', display: 'flex', flexDirection: 'column', justifyContent: 'space-between', minHeight: '160px', position: 'relative' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
@@ -279,7 +281,6 @@ function RemoteControl() {
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <p style={{ margin: 0, fontSize: '14px', color: isOn ? '#e0f2fe' : '#94a3b8', fontWeight: '500' }}>{isLoading ? 'Transmitting...' : (isOn ? 'STATE: ON' : 'STATE: OFF')}</p>
               
-              {/* RGB Manual Color Picker */}
               <div style={{ display: 'flex', gap: '8px' }} onClick={(e) => e.stopPropagation()}>
                 {Object.entries(colorMap).map(([name, hex]) => (
                   <div key={name} onClick={() => changeColor(hex)} style={{ width: '16px', height: '16px', borderRadius: '50%', backgroundColor: hex, border: lightColor === hex ? '2px solid white' : '1px solid transparent', cursor: 'pointer', opacity: isOn ? 1 : 0.4 }} />
@@ -416,7 +417,7 @@ function UserGuide() {
 // --- 3. THE HARDWARE RECEIVER SIMULATOR (/room) ---
 function RoomView() {
   const [isOn, setIsOn] = useState(false);
-  const [lightColor, setLightColor] = useState(colorMap['yellow']);
+  const [lightColor, setLightColor] = useState('#facc15');
   const [logs, setLogs] = useState(["📡 SYSTEM BOOT: LISTENING ON PORT 80..."]);
   const apiUrl = 'https://smart-home-api-production.up.railway.app/api';
 
@@ -442,22 +443,13 @@ function RoomView() {
     });
   };
 
-  // Sync color instantly from the Command Center
-  useEffect(() => {
-    const channel = new BroadcastChannel('smart_home_rgb');
-    channel.onmessage = (event) => {
-      if (event.data.type === 'COLOR_CHANGE') {
-        setLightColor(event.data.color);
-        addLog(`[~] RGB CONTROLLER: FREQUENCY SHIFT -> ${event.data.color}`);
-      }
-    };
-    return () => channel.close();
-  }, []);
-
+  // --- THE NEW CLOUD POLL SYNC ---
   useEffect(() => {
     let previousState = null; 
+    let previousColor = null;
 
     const interval = setInterval(() => {
+        // Poll Power Status
         fetch(`${apiUrl}/light/status`)
           .then(res => res.json())
           .then(data => {
@@ -474,6 +466,21 @@ function RoomView() {
               setIsOn(data.is_on);
           })
           .catch(err => console.error("API error", err));
+
+        // Poll Color Status
+        fetch(`${apiUrl}/light/color`)
+          .then(res => res.json())
+          .then(data => {
+             if (data.color && data.color !== previousColor) {
+                 if (previousColor !== null) {
+                     addLog(`[~] RGB CONTROLLER: FREQUENCY SHIFT -> ${data.color}`);
+                 }
+                 previousColor = data.color;
+                 setLightColor(data.color);
+             }
+          })
+          .catch(() => {});
+
     }, 1000); 
 
     return () => clearInterval(interval);
