@@ -19,6 +19,10 @@ function RemoteControl() {
   const [lastActive, setLastActive] = useState('Never');
   const [isLoading, setIsLoading] = useState(false);
   
+  // THE FIX: Live memory refs so the AI never gets stuck in a "stale closure"
+  const isOnRef = useRef(isOn);
+  useEffect(() => { isOnRef.current = isOn; }, [isOn]);
+
   // Voice Engine States
   const [isListening, setIsListening] = useState(false); 
   const [isAwake, setIsAwake] = useState(false); 
@@ -137,19 +141,25 @@ function RemoteControl() {
       }
 
       if (command.includes('sleep') || command.includes('standby') || command.includes('stop listening')) {
-        setAwakeState(false); playVoiceResponse('sleep_now');
+        setAwakeState(false); 
+        if (isOnRef.current) { await toggleLight(); }
+        playVoiceResponse('sleep_now');
         return; 
       }
 
       if (command.includes('shut down system') || command.includes('disable microphone')) {
-        setListeningState(false); setAwakeState(false); playVoiceResponse('shut_down'); recognition.stop(); return;
+        setListeningState(false); setAwakeState(false); 
+        if (isOnRef.current) { await toggleLight(); }
+        playVoiceResponse('shut_down'); 
+        setTimeout(() => { if (recognitionRef.current) recognitionRef.current.stop(); }, 100);
+        return;
       }
 
       let colorTriggered = false;
       for (const [colorName, hexCode] of Object.entries(colorMap)) {
         if (command.includes(colorName) && (command.includes('light') || command.includes('color') || command.includes('change') || command.includes('turn'))) {
-          await changeColor(hexCode); // Sync to Laravel
-          if (!isOn) await toggleLight(); 
+          await changeColor(hexCode); 
+          if (!isOnRef.current) await toggleLight(); 
           playVoiceResponse('turn_on'); 
           colorTriggered = true;
           break;
@@ -158,8 +168,8 @@ function RemoteControl() {
       if (colorTriggered) return; 
 
       if (command.includes('who are you') || command.includes('your name')) playVoiceResponse('intro');
-      else if (command.includes('turn on') || command.includes('light on')) { if (!isOn) { await toggleLight(); playVoiceResponse('turn_on'); } } 
-      else if (command.includes('turn off') || command.includes('light off') || command.includes('dark')) { if (isOn) { await toggleLight(); playVoiceResponse('turn_off'); } } 
+      else if (command.includes('turn on') || command.includes('light on')) { if (!isOnRef.current) { await toggleLight(); playVoiceResponse('turn_on'); } } 
+      else if (command.includes('turn off') || command.includes('light off') || command.includes('dark')) { if (isOnRef.current) { await toggleLight(); playVoiceResponse('turn_off'); } } 
       else if (command.includes('developer') || command.includes('creator') || command.includes('who made you')) playVoiceResponse('developer');
       else if (command.includes('stack') || command.includes('framework') || command.includes('built with')) playVoiceResponse('tech_stack');
       else if (command.includes('security') || command.includes('role') || command.includes('safe')) playVoiceResponse('security');
