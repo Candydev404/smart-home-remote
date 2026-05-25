@@ -97,7 +97,7 @@ function RemoteControl() {
   };
 
   const playVoiceResponse = (intent) => {
-    const audioMap = { 'intro': '/intro.mp3', 'turn_on': '/turn_on.mp3', 'turn_off': '/turn_off.mp3', 'error': '/error.mp3', 'developer': '/developer.mp3', 'tech_stack': '/tech_stack.mp3', 'security': '/security.mp3', 'budget': '/budget.mp3', 'greeting': '/greeting.mp3', 'automation': '/automation.mp3', 'shut_down': '/shutdown.mp3' };
+    const audioMap = { 'intro': '/intro.mp3', 'turn_on': '/turn_on.mp3', 'turn_off': '/turn_off.mp3', 'error': '/error.mp3', 'developer': '/developer.mp3', 'tech_stack': '/tech_stack.mp3', 'security': '/security.mp3', 'budget': '/budget.mp3', 'greeting': '/greeting.mp3', 'automation': '/automation.mp3', 'shut_down': '/shutdown.mp3', 'sleep_now': '/sleep.mp3' };
     if (audioMap[intent]) new Audio(audioMap[intent]).play().catch(() => {});
   };
 
@@ -137,11 +137,12 @@ function RemoteControl() {
       }
 
       if (command.includes('sleep') || command.includes('standby') || command.includes('stop listening')) {
-        setAwakeState(false); playVoiceResponse('shut_down'); return; 
+        setAwakeState(false); playVoiceResponse('sleep_now');
+        return; 
       }
 
       if (command.includes('shut down system') || command.includes('disable microphone')) {
-        setListeningState(false); setAwakeState(false); playVoiceResponse('turn_off'); recognition.stop(); return;
+        setListeningState(false); setAwakeState(false); playVoiceResponse('shut_down'); recognition.stop(); return;
       }
 
       let colorTriggered = false;
